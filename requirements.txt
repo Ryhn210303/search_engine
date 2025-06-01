@@ -1,5 +1,6 @@
 streamlit==1.34.0
-pandas==2.2.2
+numpy==1.26.4         # Tambahkan ini untuk mendukung pandas
+pandas==2.1.4         # Turunkan dari 2.2.2 → 2.1.4
 scikit-learn==1.4.2
 openpyxl==3.1.2
 nltk==3.8.1
