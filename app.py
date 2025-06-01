@@ -5,20 +5,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 import string
 import nltk
 from nltk.corpus import stopwords
+import os
 
-# Cek stopwords
+# Download stopwords jika belum ada
 try:
     stopwords.words('indonesian')
 except LookupError:
     nltk.download('stopwords')
-
-# Load dataset
-@st.cache_data
-def load_data():
-    df = pd.read_excel('berita_politik.xlsx')
-    df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
-    df['clean_text'] = df['text'].apply(preprocess)
-    return df
 
 # Preprocessing function
 def preprocess(text):
@@ -28,6 +21,17 @@ def preprocess(text):
     tokens = text.split()
     tokens = [word for word in tokens if word not in stop_words]
     return ' '.join(tokens)
+
+# Load dataset
+@st.cache_data
+def load_data():
+    if not os.path.exists("berita_politik.xlsx"):
+        st.error("File 'berita_politik.xlsx' tidak ditemukan.")
+        st.stop()
+    df = pd.read_excel('berita_politik.xlsx')
+    df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
+    df['clean_text'] = df['text'].apply(preprocess)
+    return df
 
 # Load and process TF-IDF
 df = load_data()
@@ -57,7 +61,8 @@ if query:
         results = search_news(query, k=k)
         st.success(f"Ditemukan {len(results)} berita relevan:")
         for i, row in results.iterrows():
-            st.markdown(f"### [{row['judul']}]({row['link']})")
+            link = row['link'] if pd.notna(row['link']) else "#"
+            st.markdown(f"### [{row['judul']}]({link})")
             st.write(row['isi'][:300] + "...")
             st.caption(f"Skor Kemiripan: {row['score']:.4f}")
             st.markdown("---")
