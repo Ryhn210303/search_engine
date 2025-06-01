@@ -55,7 +55,7 @@ def search_news(query):
     return results
 
 # Streamlit App
-st.title("Search Engine Berita Politik (K-NN + TF-IDF)")
+st.title("Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)", "")
 
