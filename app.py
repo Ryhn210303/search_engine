@@ -37,8 +37,8 @@ def load_data():
     return df
 
 # Search function
-def search_news(query, method="Cosine"):
-    k = 5  # selalu ambil 5 berita
+def search_news(query, method="Cosine Similarity"):
+    k = 5  # jumlah berita yang ditampilkan
     query_clean = preprocess(query)
 
     if method == "Cosine Similarity":
@@ -75,9 +75,9 @@ st.title("Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
 method = st.selectbox("Pilih metode similarity", ["Cosine Similarity", "BM25", "BM25+"])
+search_button = st.button("Cari Berita")
 
-
-if query:
+if search_button and query:
     with st.spinner("Mencari berita..."):
         results = search_news(query, method=method)
         if not results.empty:
