@@ -37,9 +37,11 @@ def load_data():
     return df
 
 # Search function
-def search_news(query, k=5, method="Cosine"):
+def search_news(query, method="Cosine"):
+    k = 5  # selalu ambil 5 berita
     query_clean = preprocess(query)
-    if method == "Cosine":
+
+    if method == "Cosine Similarity":
         query_vec = tfidf_vectorizer.transform([query_clean])
         similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
     elif method == "BM25":
@@ -72,16 +74,18 @@ bm25_plus = BM25Plus(df['tokens'].tolist())
 st.title("Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
-k = st.slider("Jumlah hasil berita")
 method = st.selectbox("Pilih metode similarity", ["Cosine Similarity", "BM25", "BM25+"])
 
 
 if query:
     with st.spinner("Mencari berita..."):
-        results = search_news(query, k=5, method=method)
-        st.success(f"Hasil dengan metode {method}:")
-        for i, row in results.iterrows():
-            st.markdown(f"### [{row['judul']}]({row['link']})")
-            st.write(row['isi'][:300] + "...")
-            st.caption(f"Skor Kemiripan: {row['score']:.4f}")
-            st.markdown("---")
+        results = search_news(query, method=method)
+        if not results.empty:
+            st.success(f"Hasil pencarian teratas dengan metode {method}:")
+            for i, row in results.iterrows():
+                st.markdown(f"### [{row['judul']}]({row['link']})")
+                st.write(row['isi'][:300] + "...")
+                st.caption(f"Skor Kemiripan: {row['score']:.4f}")
+                st.markdown("---")
+        else:
+            st.warning("Tidak ditemukan hasil relevan.")
