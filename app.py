@@ -69,16 +69,16 @@ bm25 = BM25Okapi(df['tokens'].tolist())
 bm25_plus = BM25Plus(df['tokens'].tolist())
 
 # Streamlit UI
-st.title("🔍 Search Engine Berita Politik")
+st.title("Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
-k = st.slider("Jumlah hasil berita", 1, 10, 5)
-method = st.selectbox("Pilih metode similarity", ["Cosine", "BM25", "BM25+"])
+k = st.slider("Jumlah hasil berita")
+method = st.selectbox("Pilih metode similarity", ["Cosine Similarity", "BM25", "BM25+"])
 
 
 if query:
     with st.spinner("Mencari berita..."):
-        results = search_news(query, k=k, method=method)
+        results = search_news(query, k=5, method=method)
         st.success(f"Hasil dengan metode {method}:")
         for i, row in results.iterrows():
             st.markdown(f"### [{row['judul']}]({row['link']})")
