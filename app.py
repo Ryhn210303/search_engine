@@ -1,19 +1,19 @@
 import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics.pairwise import cosine_similarity
 import string
 import nltk
 from nltk.corpus import stopwords
-import os
+from rank_bm25 import BM25Okapi, BM25Plus
 
-# Download stopwords jika belum ada
+# Download stopwords jika belum
 try:
     stopwords.words('indonesian')
 except LookupError:
     nltk.download('stopwords')
 
-# Preprocessing function
+# Preprocessing
 def preprocess(text):
     text = text.lower()
     text = text.translate(str.maketrans('', '', string.punctuation))
@@ -22,50 +22,66 @@ def preprocess(text):
     tokens = [word for word in tokens if word not in stop_words]
     return ' '.join(tokens)
 
+def tokenize(text):
+    stop_words = set(stopwords.words('indonesian'))
+    tokens = text.lower().translate(str.maketrans('', '', string.punctuation)).split()
+    return [t for t in tokens if t not in stop_words]
+
 # Load dataset
 @st.cache_data
 def load_data():
-    if not os.path.exists("berita_politik.xlsx"):
-        st.error("File 'berita_politik.xlsx' tidak ditemukan.")
-        st.stop()
-    df = pd.read_excel('berita_politik.xlsx')
+    df = pd.read_excel("berita_politik.xlsx")
     df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
     df['clean_text'] = df['text'].apply(preprocess)
+    df['tokens'] = df['text'].apply(tokenize)
     return df
 
-# Load data
-df = load_data()
-
-# TF-IDF
-vectorizer = TfidfVectorizer()
-tfidf_matrix = vectorizer.fit_transform(df['clean_text'])
-
-# Fit Nearest Neighbors model
-knn_model = NearestNeighbors(n_neighbors=10, metric='cosine')
-knn_model.fit(tfidf_matrix)
-
 # Search function
-def search_news(query):
+def search_news(query, k=5, method="Cosine"):
     query_clean = preprocess(query)
-    query_vec = vectorizer.transform([query_clean])
-    distances, indices = knn_model.kneighbors(query_vec)
-    
-    results = df.iloc[indices[0]][['judul', 'isi', 'link']].copy()
-    results['score'] = 1 - distances[0]  # cosine similarity
+    if method == "Cosine":
+        query_vec = tfidf_vectorizer.transform([query_clean])
+        similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    elif method == "BM25":
+        query_tokens = tokenize(query)
+        similarity = bm25.get_scores(query_tokens)
+    elif method == "BM25+":
+        query_tokens = tokenize(query)
+        similarity = bm25_plus.get_scores(query_tokens)
+    else:
+        st.error("Metode tidak dikenali.")
+        return pd.DataFrame()
+
+    top_indices = similarity.argsort()[-k:][::-1]
+    results = df.iloc[top_indices][['judul', 'isi', 'link']].copy()
+    results['score'] = similarity[top_indices]
     return results
 
-# Streamlit App
-st.title("Search Engine Berita Politik")
+# Load data dan vektor
+df = load_data()
 
-query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)", "")
+# Cosine - TF-IDF
+tfidf_vectorizer = TfidfVectorizer()
+tfidf_matrix = tfidf_vectorizer.fit_transform(df['clean_text'])
+
+# BM25 dan BM25+
+bm25 = BM25Okapi(df['tokens'].tolist())
+bm25_plus = BM25Plus(df['tokens'].tolist())
+
+# Streamlit UI
+st.title("🔍 Search Engine Berita Politik")
+
+query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
+k = st.slider("Jumlah hasil berita", 1, 10, 5)
+method = st.selectbox("Pilih metode similarity", ["Cosine", "BM25", "BM25+"])
+
 
 if query:
     with st.spinner("Mencari berita..."):
-        results = search_news(query)
-        st.success(f"Ditemukan {len(results)} berita relevan:")
-        for _, row in results.iterrows():
-            link = row['link'] if pd.notna(row['link']) else "#"
-            st.markdown(f"### [{row['judul']}]({link})")
+        results = search_news(query, k=k, method=method)
+        st.success(f"Hasil dengan metode {method}:")
+        for i, row in results.iterrows():
+            st.markdown(f"### [{row['judul']}]({row['link']})")
             st.write(row['isi'][:300] + "...")
             st.caption(f"Skor Kemiripan: {row['score']:.4f}")
             st.markdown("---")
