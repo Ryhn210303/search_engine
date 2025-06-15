@@ -1,5 +1,6 @@
-streamlit
 pandas
+streamlit
 scikit-learn
-openpyxl
 nltk
+openpyxl
+rank_bm25
