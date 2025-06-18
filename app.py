@@ -55,7 +55,13 @@ def search_news(query, method="Cosine Similarity"):
         return pd.DataFrame()
 
     top_indices = similarity.argsort()[-k:][::-1]
-    results = df.iloc[top_indices][['judul', 'isi', 'link']].copy()
+
+    # Cek apakah kolom 'link' ada
+    available_cols = ['judul', 'isi']
+    if 'link' in df.columns:
+        available_cols.append('link')
+
+    results = df.iloc[top_indices][available_cols].copy()
     results['score'] = similarity[top_indices]
     return results
 
@@ -71,7 +77,7 @@ bm25 = BM25Okapi(df['tokens'].tolist())
 bm25_plus = BM25Plus(df['tokens'].tolist())
 
 # Streamlit UI
-st.title("Search Engine Berita Politik")
+st.title("🔍 Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
 method = st.selectbox("Pilih metode similarity", ["Cosine Similarity", "BM25", "BM25+"])
@@ -83,7 +89,10 @@ if search_button and query:
         if not results.empty:
             st.success(f"Hasil pencarian teratas dengan metode {method}:")
             for i, row in results.iterrows():
-                st.markdown(f"### [{row['judul']}]({row['link']})")
+                if 'link' in row and pd.notna(row['link']):
+                    st.markdown(f"### [{row['judul']}]({row['link']})")
+                else:
+                    st.markdown(f"### {row['judul']}")
                 st.write(row['isi'][:300] + "...")
                 st.caption(f"Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
