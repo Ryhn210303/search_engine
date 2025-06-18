@@ -7,7 +7,7 @@ import nltk
 from nltk.corpus import stopwords
 from rank_bm25 import BM25Okapi, BM25Plus
 
-# Download stopwords jika belum
+# Download stopwords jika belum ada
 try:
     stopwords.words('indonesian')
 except LookupError:
@@ -38,7 +38,7 @@ def load_data():
 
 # Search function
 def search_news(query, method="Cosine Similarity"):
-    k = 5  # jumlah berita yang ditampilkan
+    k = 5  # jumlah hasil yang ditampilkan
     query_clean = preprocess(query)
 
     if method == "Cosine Similarity":
@@ -56,9 +56,9 @@ def search_news(query, method="Cosine Similarity"):
 
     top_indices = similarity.argsort()[-k:][::-1]
 
-    # Cek apakah kolom 'link' ada
+    # Gunakan 'url' jika tersedia
     available_cols = ['judul', 'isi']
-    if 'link' in df.columns:
+    if 'url' in df.columns:
         available_cols.append('url')
 
     results = df.iloc[top_indices][available_cols].copy()
@@ -88,11 +88,16 @@ if search_button and query:
         results = search_news(query, method=method)
         if not results.empty:
             st.success(f"Hasil pencarian teratas dengan metode {method}:")
-            for i, row in results.iterrows():
-                if 'link' in row and pd.notna(row['link']):
-                    st.markdown(f"### [{row['judul']}]({row['link']})")
+            for _, row in results.iterrows():
+                # Gunakan url jika ada
+                url = row.get('url', '')
+                if isinstance(url, str) and pd.notna(url) and url.strip() != "":
+                    if not url.startswith("http"):
+                        url = "https://" + url
+                    st.markdown(f"### [{row['judul']}]({url})")
                 else:
                     st.markdown(f"### {row['judul']}")
+                
                 st.write(row['isi'][:300] + "...")
                 st.caption(f"Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
