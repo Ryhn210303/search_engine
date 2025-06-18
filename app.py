@@ -59,7 +59,7 @@ def search_news(query, method="Cosine Similarity"):
     # Cek apakah kolom 'link' ada
     available_cols = ['judul', 'isi']
     if 'link' in df.columns:
-        available_cols.append('link')
+        available_cols.append('url')
 
     results = df.iloc[top_indices][available_cols].copy()
     results['score'] = similarity[top_indices]
