@@ -38,7 +38,7 @@ def load_data():
 
 # Search function
 def search_news(query, method="Cosine Similarity"):
-    k = 10
+    k = 10  # jumlah hasil yang ditampilkan
     query_clean = preprocess(query)
 
     if method == "Cosine Similarity":
@@ -56,31 +56,27 @@ def search_news(query, method="Cosine Similarity"):
 
     top_indices = similarity.argsort()[-k:][::-1]
 
+    # Gunakan 'url' jika tersedia
     available_cols = ['judul', 'isi']
     if 'url' in df.columns:
         available_cols.append('url')
-    if 'tanggal' in df.columns:
-        available_cols.append('tanggal')
 
     results = df.iloc[top_indices][available_cols].copy()
     results['score'] = similarity[top_indices]
     return results
 
-# Evaluation: Precision at k
-def precision_at_k(results, k=10):
-    if 'label' not in results.columns:
-        return None
-    return results['label'].head(k).sum() / k
-
-# Load data dan buat vektor
+# Load data dan vektor
 df = load_data()
 
+# Cosine - TF-IDF
 tfidf_vectorizer = TfidfVectorizer()
 tfidf_matrix = tfidf_vectorizer.fit_transform(df['clean_text'])
 
+# BM25 dan BM25+
 bm25 = BM25Okapi(df['tokens'].tolist())
 bm25_plus = BM25Plus(df['tokens'].tolist())
 
+# Streamlit UI
 st.title("🔍 Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
@@ -93,46 +89,17 @@ if search_button and query:
         if not results.empty:
             st.success(f"Hasil pencarian teratas dengan metode {method}:")
             for _, row in results.iterrows():
+                # Gunakan url jika ada
                 url = row.get('url', '')
-                judul = row['judul']
-                tanggal = row.get('tanggal', '')
-                isi = row['isi'][:300] + "..."
-
                 if isinstance(url, str) and pd.notna(url) and url.strip() != "":
                     if not url.startswith("http"):
                         url = "https://" + url
-                    st.markdown(f"### [{judul}]({url})")
+                    st.markdown(f"### [{row['judul']}]({url})")
                 else:
-                    st.markdown(f"### {judul}")
-
-                if pd.notna(tanggal):
-                    st.caption(f"Tanggal: {tanggal}")
-                st.write(isi)
+                    st.markdown(f"### {row['judul']}")
+                
+                st.write(row['isi'][:300] + "...")
                 st.caption(f"Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
-            
-            # Precision if label exists
-            prec = precision_at_k(results)
-            if prec is not None:
-                st.info(f"🎯 Presisi@10: {prec:.2f}")
         else:
             st.warning("Tidak ditemukan hasil relevan.")
-
-# Evaluasi Semua Metode dengan 10 Query (opsional)
-with st.expander("📊 Evaluasi Presisi 10 Query"):
-    st.markdown("Jika dataset memiliki kolom `label`, sistem dapat mengevaluasi presisi dari 10 query terhadap 3 metode.")
-    test_queries = [
-        "pemilu presiden", "kpu dan dpt", "kampanye politik", "partai politik baru",
-        "pemilihan legislatif", "isu korupsi", "undang-undang pemilu", "politik uang",
-        "netralitas ASN", "hasil quick count"
-    ]
-
-    eval_data = []
-    for q in test_queries:
-        for m in ["Cosine Similarity", "BM25", "BM25+"]:
-            res = search_news(q, method=m)
-            prec = precision_at_k(res)
-            eval_data.append({"Query": q, "Metode": m, "Presisi@10": round(prec, 2) if prec is not None else "N/A"})
-
-    eval_df = pd.DataFrame(eval_data)
-    st.dataframe(eval_df)
