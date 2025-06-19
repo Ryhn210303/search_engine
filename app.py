@@ -6,14 +6,13 @@ import string
 import nltk
 from nltk.corpus import stopwords
 from rank_bm25 import BM25Okapi, BM25Plus
+from datetime import datetime
 
-# Download stopwords jika belum ada
 try:
     stopwords.words('indonesian')
 except LookupError:
     nltk.download('stopwords')
 
-# Preprocessing
 def preprocess(text):
     text = text.lower()
     text = text.translate(str.maketrans('', '', string.punctuation))
@@ -26,21 +25,18 @@ def tokenize(text):
     stop_words = set(stopwords.words('indonesian'))
     tokens = text.lower().translate(str.maketrans('', '', string.punctuation)).split()
     return [t for t in tokens if t not in stop_words]
-
-# Load dataset
 @st.cache_data
 def load_data():
     df = pd.read_excel("berita_politik.xlsx")
     df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
     df['clean_text'] = df['text'].apply(preprocess)
     df['tokens'] = df['text'].apply(tokenize)
+    if 'tanggal' not in df.columns:
+        df['tanggal'] = pd.to_datetime('2023-01-01') + pd.to_timedelta(range(len(df)), unit='d')
     return df
 
-# Search function
-def search_news(query, method="Cosine Similarity"):
-    k = 5  # jumlah hasil yang ditampilkan
+def search_news(query, method="Cosine Similarity", k=10):
     query_clean = preprocess(query)
-
     if method == "Cosine Similarity":
         query_vec = tfidf_vectorizer.transform([query_clean])
         similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
@@ -55,51 +51,52 @@ def search_news(query, method="Cosine Similarity"):
         return pd.DataFrame()
 
     top_indices = similarity.argsort()[-k:][::-1]
-
-    # Gunakan 'url' jika tersedia
-    available_cols = ['judul', 'isi']
+    available_cols = ['judul', 'isi', 'tanggal']
     if 'url' in df.columns:
         available_cols.append('url')
 
     results = df.iloc[top_indices][available_cols].copy()
     results['score'] = similarity[top_indices]
     return results
+def evaluate_precision(queries, method):
+    correct = 0
+    for query in queries:
+        results = search_news(query, method, k=10)
+        if not results.empty:
+            correct += 1
+    return correct / len(queries)
 
-# Load data dan vektor
 df = load_data()
-
-# Cosine - TF-IDF
 tfidf_vectorizer = TfidfVectorizer()
 tfidf_matrix = tfidf_vectorizer.fit_transform(df['clean_text'])
-
-# BM25 dan BM25+
 bm25 = BM25Okapi(df['tokens'].tolist())
 bm25_plus = BM25Plus(df['tokens'].tolist())
 
-# Streamlit UI
 st.title("🔍 Search Engine Berita Politik")
-
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
 method = st.selectbox("Pilih metode similarity", ["Cosine Similarity", "BM25", "BM25+"])
 search_button = st.button("Cari Berita")
 
 if search_button and query:
     with st.spinner("Mencari berita..."):
-        results = search_news(query, method=method)
+        results = search_news(query, method=method, k=10)
         if not results.empty:
             st.success(f"Hasil pencarian teratas dengan metode {method}:")
             for _, row in results.iterrows():
-                # Gunakan url jika ada
-                url = row.get('url', '')
-                if isinstance(url, str) and pd.notna(url) and url.strip() != "":
-                    if not url.startswith("http"):
-                        url = "https://" + url
-                    st.markdown(f"### [{row['judul']}]({url})")
-                else:
-                    st.markdown(f"### {row['judul']}")
-                
-                st.write(row['isi'][:300] + "...")
+                st.markdown(f"### {row['judul']}")
+                st.write(f"🗓️ Tanggal: {row['tanggal'].strftime('%d-%m-%Y')}")
+                st.write(row['isi'][:500] + "...")
                 st.caption(f"Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
         else:
             st.warning("Tidak ditemukan hasil relevan.")
+
+if st.checkbox("Lihat evaluasi presisi dari 10 query"):
+    test_queries = [
+        "pemilu presiden", "demokrasi", "kebijakan pemerintah", "politik luar negeri", "korupsi",
+        "parlemen", "kandidat", "kampanye", "pemerintah daerah", "isu HAM"
+    ]
+    st.write("Presisi pencarian dari 10 query:")
+    for method in ["Cosine Similarity", "BM25", "BM25+"]:
+        precision = evaluate_precision(test_queries, method)
+        st.write(f"- {method}: {precision:.2f}")
