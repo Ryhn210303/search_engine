@@ -34,6 +34,11 @@ def load_data():
     df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
     df['clean_text'] = df['text'].apply(preprocess)
     df['tokens'] = df['text'].apply(tokenize)
+
+    # Konversi kolom tanggal jika ada
+    if 'tanggal' in df.columns:
+        df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce')
+
     return df
 
 # Search function
@@ -56,8 +61,10 @@ def search_news(query, method="Cosine Similarity"):
 
     top_indices = similarity.argsort()[-k:][::-1]
 
-    # Gunakan 'url' jika tersedia
+    # Kolom yang akan ditampilkan
     available_cols = ['judul', 'isi']
+    if 'tanggal' in df.columns:
+        available_cols.append('tanggal')
     if 'url' in df.columns:
         available_cols.append('url')
 
@@ -65,7 +72,7 @@ def search_news(query, method="Cosine Similarity"):
     results['score'] = similarity[top_indices]
     return results
 
-# Load data dan vektor
+# Load data dan vectorizer
 df = load_data()
 
 # Cosine - TF-IDF
@@ -89,17 +96,24 @@ if search_button and query:
         if not results.empty:
             st.success(f"Hasil pencarian teratas dengan metode {method}:")
             for _, row in results.iterrows():
-                # Gunakan url jika ada
                 url = row.get('url', '')
+                tanggal = row.get('tanggal', None)
+
+                # Judul + link jika ada
                 if isinstance(url, str) and pd.notna(url) and url.strip() != "":
                     if not url.startswith("http"):
                         url = "https://" + url
                     st.markdown(f"### [{row['judul']}]({url})")
                 else:
                     st.markdown(f"### {row['judul']}")
-                
+
+                # Tampilkan tanggal jika ada
+                if pd.notna(tanggal):
+                    st.caption(f"📅 Tanggal: {tanggal.strftime('%d %B %Y')}")
+
+                # Tampilkan ringkasan isi
                 st.write(row['isi'][:300] + "...")
-                st.caption(f"Skor Kemiripan: {row['score']:.4f}")
+                st.caption(f"🔍 Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
         else:
             st.warning("Tidak ditemukan hasil relevan.")
