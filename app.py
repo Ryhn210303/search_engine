@@ -69,6 +69,14 @@ query_list = [
     "caleg korupsi"
 ]
 
+# --- Streamlit State Init ---
+if 'results' not in st.session_state:
+    st.session_state.results = None
+if 'run_search' not in st.session_state:
+    st.session_state.run_search = False
+if 'relevance_list' not in st.session_state:
+    st.session_state.relevance_list = []
+
 # --- Streamlit App ---
 st.title("🧪 Evaluasi Presisi Search Engine Berita Politik")
 
@@ -93,34 +101,43 @@ def search(query, method):
     results['score'] = similarity[top_indices]
     return results
 
-# Run Search and Evaluation
+# Run Search and Store in Session
 if st.button("Tampilkan Hasil & Evaluasi"):
-    results = search(selected_query, method)
-    st.subheader("📋 Hasil Pencarian dan Evaluasi")
+    st.session_state.results = search(selected_query, method)
+    st.session_state.query = selected_query
+    st.session_state.method = method
+    st.session_state.run_search = True
+    st.session_state.relevance_list = []
 
+# Display Results and Collect Evaluation
+if st.session_state.run_search and st.session_state.results is not None:
+    st.subheader("📋 Hasil Pencarian dan Evaluasi")
     relevance_list = []
-    for i, row in results.iterrows():
+    for i, row in st.session_state.results.iterrows():
         st.markdown(f"### {row['judul']}")
         if pd.notna(row.get('tanggal')):
             st.caption(f"📅 {row['tanggal'].strftime('%d %B %Y %H:%M')}")
         st.write(row['isi'][:300] + "...")
         st.caption(f"🔍 Skor Kemiripan: {row['score']:.4f}")
 
-        relevant = st.radio(f"Apakah hasil ke-{i} relevan?", ["Belum Dinilai", "Relevan", "Tidak Relevan"], key=f"rel_{i}")
+        choice = st.radio(f"Apakah hasil ke-{i} relevan?", ["Belum Dinilai", "Relevan", "Tidak Relevan"], key=f"rel_{i}")
         relevance_list.append({
-            "query": selected_query,
-            "metode": method,
+            "query": st.session_state.query,
+            "metode": st.session_state.method,
             "judul": row['judul'],
             "skor": row['score'],
-            "relevan": 1 if relevant == "Relevan" else (0 if relevant == "Tidak Relevan" else None)
+            "relevan": 1 if choice == "Relevan" else (0 if choice == "Tidak Relevan" else None)
         })
         st.markdown("---")
 
-    if st.button("💾 Simpan Hasil Evaluasi"):
-        df_eval = pd.DataFrame(relevance_list)
-        df_eval.dropna(subset=['relevan'], inplace=True)
-        presisi = df_eval['relevan'].mean() if not df_eval.empty else 0.0
-        filename = f"evaluasi_presisi_{method.replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        df_eval.to_csv(filename, index=False)
-        st.success(f"Hasil evaluasi disimpan sebagai {filename}.")
-        st.info(f"Presisi: {presisi:.2f} ({int(presisi*100)}%)")
+    st.session_state.relevance_list = relevance_list
+
+# Save Evaluation Results
+if st.button("💾 Simpan Hasil Evaluasi") and 'relevance_list' in st.session_state:
+    df_eval = pd.DataFrame(st.session_state.relevance_list)
+    df_eval.dropna(subset=['relevan'], inplace=True)
+    presisi = df_eval['relevan'].mean() if not df_eval.empty else 0.0
+    filename = f"evaluasi_presisi_{st.session_state.method.replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    df_eval.to_csv(filename, index=False)
+    st.success(f"Hasil evaluasi disimpan sebagai {filename}.")
+    st.info(f"Presisi: {presisi:.2f} ({int(presisi*100)}%)")
