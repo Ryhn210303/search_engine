@@ -3,17 +3,18 @@ import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import string
+import re
 import nltk
 from nltk.corpus import stopwords
 from rank_bm25 import BM25Okapi, BM25Plus
 
-# Download stopwords jika belum ada
+# Unduh stopwords jika belum ada
 try:
     stopwords.words('indonesian')
 except LookupError:
     nltk.download('stopwords')
 
-# Preprocessing
+# Preprocessing teks
 def preprocess(text):
     text = text.lower()
     text = text.translate(str.maketrans('', '', string.punctuation))
@@ -27,23 +28,32 @@ def tokenize(text):
     tokens = text.lower().translate(str.maketrans('', '', string.punctuation)).split()
     return [t for t in tokens if t not in stop_words]
 
-# Load dataset
+# Membersihkan dan mengonversi kolom tanggal
+def clean_tanggal(text):
+    if isinstance(text, str):
+        text = re.sub(r'^[A-Za-z]+,\s*', '', text)  # Hapus "Rabu, "
+        text = text.replace('WIB', '').strip()
+        return text
+    return text
+
+# Load dan proses data
 @st.cache_data
 def load_data():
     df = pd.read_excel("berita_politik.xlsx")
+
     df['text'] = df['judul'].astype(str) + " " + df['isi'].astype(str)
     df['clean_text'] = df['text'].apply(preprocess)
     df['tokens'] = df['text'].apply(tokenize)
 
-    # Konversi kolom tanggal jika ada
     if 'tanggal' in df.columns:
-        df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce')
+        df['tanggal'] = df['tanggal'].apply(clean_tanggal)
+        df['tanggal'] = pd.to_datetime(df['tanggal'], format='%d %b %Y %H:%M', errors='coerce')
 
     return df
 
-# Search function
+# Fungsi pencarian
 def search_news(query, method="Cosine Similarity"):
-    k = 10  # jumlah hasil yang ditampilkan
+    k = 10
     query_clean = preprocess(query)
 
     if method == "Cosine Similarity":
@@ -61,7 +71,6 @@ def search_news(query, method="Cosine Similarity"):
 
     top_indices = similarity.argsort()[-k:][::-1]
 
-    # Kolom yang akan ditampilkan
     available_cols = ['judul', 'isi']
     if 'tanggal' in df.columns:
         available_cols.append('tanggal')
@@ -72,18 +81,16 @@ def search_news(query, method="Cosine Similarity"):
     results['score'] = similarity[top_indices]
     return results
 
-# Load data dan vectorizer
+# Load data dan bangun model
 df = load_data()
 
-# Cosine - TF-IDF
 tfidf_vectorizer = TfidfVectorizer()
 tfidf_matrix = tfidf_vectorizer.fit_transform(df['clean_text'])
 
-# BM25 dan BM25+
 bm25 = BM25Okapi(df['tokens'].tolist())
 bm25_plus = BM25Plus(df['tokens'].tolist())
 
-# Streamlit UI
+# UI Streamlit
 st.title("🔍 Search Engine Berita Politik")
 
 query = st.text_input("Masukkan kata kunci (misal: pemilu presiden)")
@@ -99,7 +106,7 @@ if search_button and query:
                 url = row.get('url', '')
                 tanggal = row.get('tanggal', None)
 
-                # Judul + link jika ada
+                # Judul & Link
                 if isinstance(url, str) and pd.notna(url) and url.strip() != "":
                     if not url.startswith("http"):
                         url = "https://" + url
@@ -107,11 +114,11 @@ if search_button and query:
                 else:
                     st.markdown(f"### {row['judul']}")
 
-                # Tampilkan tanggal jika ada
+                # Tanggal
                 if pd.notna(tanggal):
-                    st.caption(f"📅 Tanggal: {tanggal.strftime('%d %B %Y')}")
+                    st.caption(f"📅 Tanggal: {tanggal.strftime('%d %B %Y %H:%M')}")
 
-                # Tampilkan ringkasan isi
+                # Isi + Skor
                 st.write(row['isi'][:300] + "...")
                 st.caption(f"🔍 Skor Kemiripan: {row['score']:.4f}")
                 st.markdown("---")
